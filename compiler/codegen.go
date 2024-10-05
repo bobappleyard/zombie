@@ -24,12 +24,94 @@ const (
 )
 
 type pkg struct {
-	funcs []*wasm.Func
+	funcs   []wasm.Func
+	initFn  wasm.Func
+	globals data.Set[binding]
+}
+
+func newPkg() *pkg {
+	p := &pkg{
+		globals: *data.NewSet(binding.compare),
+	}
+	p.initFn.Locals = []wasm.LocalDecl{{
+		Count: 2,
+		Type:  wasm.Int32,
+	}}
+	return p
+}
+
+func (p *pkg) compileToplevel(e sexpr.Expr) {
+	if e.Kind() != sexpr.List {
+		return
+	}
+	if e.Empty() {
+		return
+	}
+	if e.Head().Kind() == sexpr.Symbol {
+
+	}
+	c := &compiler{
+		pkg:      p,
+		bindings: *p.globals.Clone(),
+		dest:     p.initFn,
+	}
+	visitExpression(c, e)
+	p.initFn = c.dest
+	// p.initFn.Drop()
+}
+
+func (p *pkg) module() wasm.Module {
+	// p.initFn.I32Const(0)
+	p.initFn.End()
+
+	pref := wasm.Func{}
+	pref.NullFunc()
+	pref.I32Const(int32(len(p.funcs)))
+	pref.TableGrow(0)
+	pref.GlobalSet(funcBaseGlobal)
+	pref.GlobalGet(funcBaseGlobal)
+	pref.I32Const(0)
+	pref.I32Const(int32(len(p.funcs)))
+	pref.TableInit(0, 0)
+
+	p.initFn.Instructions = append(pref.Instructions, p.initFn.Instructions...)
+
+	g := wasm.GlobalDecl{Type: wasm.Int32}
+	g.Init.I32Const(0)
+	g.Init.End()
+
+	funcs := make([]wasm.Index[wasm.Type], len(p.funcs)+1)
+	elements := make([]wasm.Index[wasm.Func], len(p.funcs))
+	for i := range elements {
+		elements[i] = wasm.Index[wasm.Func](i + 1)
+	}
+
+	return wasm.Module{
+		Globals: []wasm.GlobalDecl{g},
+		Types: []wasm.Type{wasm.FuncType{
+			In:  []wasm.Type{wasm.Int32, wasm.Int32},
+			Out: []wasm.Type{wasm.Int32},
+		}},
+		Codes: append(p.funcs, p.initFn),
+		Funcs: funcs,
+		Elements: []wasm.Element{
+			&wasm.FuncElement{Funcs: elements},
+		},
+		Imports: []wasm.Import{
+			wasm.FuncImport{Module: "runtime", Name: "call-procedure", Type: 0},
+			wasm.MemoryImport{Module: "runtime", Name: "memory", Type: wasm.MinMemory{Min: 0}},
+			wasm.TableImport{Module: "runtime", Name: "funcs"},
+		},
+		Exports: []wasm.Export{wasm.FuncExport{
+			Name: "test",
+			Func: wasm.Index[wasm.Func](len(p.funcs) + 1),
+		}},
+	}
 }
 
 type compiler struct {
 	pkg      *pkg
-	dest     *wasm.Func
+	dest     wasm.Func
 	base     int
 	tail     bool
 	bindings data.Set[binding]
@@ -104,7 +186,19 @@ func (e *compiler) visitIf(cond sexpr.Expr, then sexpr.Expr, els sexpr.Expr) {
 
 // visitLambda implements visitor.
 func (e *compiler) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
+	// get the table position
+	e.dest.GlobalGet(funcBaseGlobal)
+	e.dest.I32Const(e.compileProcedure(vars, body))
+	e.dest.I32Add()
 
+	// encode a procedure reference
+	e.dest.I32Const(4)
+	e.dest.I32Shl()
+	e.dest.I32Const(5)
+	e.dest.I32Or()
+}
+
+func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 	// prepare env
 	bindings := data.NewSet(binding.compare)
 	for outer := range e.bindings.Items() {
@@ -117,60 +211,48 @@ func (e *compiler) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 		bindings.Put(binding{
 			name:     v.UnsafeText(),
 			kind:     &argKind{},
-			position: i + 1,
+			position: i,
 		})
 	}
 
-	f := &wasm.Func{
-		Locals: []wasm.LocalDecl{{
-			Count: 2,
-			Type:  wasm.Int32,
-		}},
-	}
-
-	// prolog
-	args, locals := neededSlots(body)
-
-	f.LocalGet(argCountLocal)
-	f.I32Const(int32(exprLen(vars)))
-	f.I32Ne()
-	f.If()
-	f.Unreachable()
-	f.End()
-	f.LocalGet(argBaseLocal)
-	f.I32Const(int32(locals))
-	f.I32Sub()
-	f.LocalSet(varBaseLocal)
-	f.LocalGet(varBaseLocal)
-	f.I32Const(int32(args))
-	f.I32Sub()
-	f.LocalSet(callBaseLocal)
-
 	//compile the function
 	c := &compiler{
-		pkg:      e.pkg,
-		dest:     f,
+		pkg: e.pkg,
+		dest: wasm.Func{
+			Locals: []wasm.LocalDecl{{
+				Count: 2,
+				Type:  wasm.Int32,
+			}},
+		},
 		tail:     true,
 		base:     0,
 		bindings: *bindings,
 	}
 
+	// prolog
+	args, locals := neededSlots(body)
+
+	c.dest.LocalGet(argCountLocal)
+	c.dest.I32Const(int32(exprLen(vars)))
+	c.dest.I32Ne()
+	c.dest.If()
+	c.dest.Unreachable()
+	c.dest.End()
+	c.dest.LocalGet(argBaseLocal)
+	c.dest.I32Const(int32(locals) * wordSize)
+	c.dest.I32Sub()
+	c.dest.LocalSet(varBaseLocal)
+	c.dest.LocalGet(varBaseLocal)
+	c.dest.I32Const(int32(args) * wordSize)
+	c.dest.I32Sub()
+	c.dest.LocalSet(callBaseLocal)
 	visitExpression(c, body)
-	f.End()
+	c.dest.End()
 
-	// get the table position
-	e.dest.GlobalGet(funcBaseGlobal)
-	e.dest.I32Const(int32(len(e.pkg.funcs)))
-	e.dest.I32Add()
+	id := len(e.pkg.funcs)
+	e.pkg.funcs = append(e.pkg.funcs, c.dest)
 
-	e.pkg.funcs = append(e.pkg.funcs, f)
-
-	// encode a procedure reference
-	e.dest.I32Const(3)
-	e.dest.I32Shl()
-	e.dest.I32Const(5)
-	e.dest.I32Or()
-
+	return int32(id)
 }
 
 // visitLet implements visitor.
@@ -230,7 +312,7 @@ func (e *compiler) visitNumber(s string) {
 // visitSet implements visitor.
 func (e *compiler) visitSet(dest sexpr.Expr, val sexpr.Expr) {
 	b, _ := e.bindings.Get(binding{name: dest.UnsafeText()})
-	b.kind.setCode(e.dest, b.position, func(f *wasm.Func) {
+	b.kind.setCode(&e.dest, b.position, func(f *wasm.Func) {
 		visitExpression(e, val)
 	})
 }
@@ -243,5 +325,5 @@ func (e *compiler) visitString(x string) {
 // visitSymbol implements visitor.
 func (e *compiler) visitSymbol(x string) {
 	b, _ := e.bindings.Get(binding{name: x})
-	b.kind.getCode(e.dest, b.position)
+	b.kind.getCode(&e.dest, b.position)
 }

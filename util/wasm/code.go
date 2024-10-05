@@ -87,7 +87,7 @@ func (c *Expr) Return()                       { c.op(0x0f) }
 func (c *Expr) Call(idx uint32)               { c.op(0x10, idx) }
 func (c *Expr) CallIndirect(idx uint32)       { c.op(0x11, idx, 0) }
 func (c *Expr) ReturnCall(idx uint32)         { c.op(0x12, idx) }
-func (c *Expr) ReturnCallIndirect(idx uint32) { c.op(0x13, idx) }
+func (c *Expr) ReturnCallIndirect(idx uint32) { c.op(0x13, idx, 0) }
 
 func (c *Expr) Drop()                { c.op(0x1a) }
 func (c *Expr) LocalGet(idx uint32)  { c.op(0x20, idx) }

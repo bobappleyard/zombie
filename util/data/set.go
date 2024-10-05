@@ -14,6 +14,13 @@ func NewSet[T any](cmp func(T, T) int) *Set[T] {
 	return &Set[T]{cmp: cmp}
 }
 
+func (s *Set[T]) Clone() *Set[T] {
+	return &Set[T]{
+		items: slices.Clone(s.items),
+		cmp:   s.cmp,
+	}
+}
+
 func (s *Set[T]) Size() int {
 	return len(s.items)
 }

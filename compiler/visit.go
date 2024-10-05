@@ -36,31 +36,35 @@ func visitExpression(v visitor, e sexpr.Expr) {
 			switch e.Head().UnsafeText() {
 			case "begin":
 				v.visitBegin(e.Tail())
+				return
 
 			case "let":
 				var bdgs, in sexpr.Expr
 				e.Tail().Bind(&bdgs, &in)
 				v.visitLet(bdgs, in)
+				return
 
 			case "set!":
 				var dest, val sexpr.Expr
 				e.Tail().Bind(&dest, &val)
 				v.visitSet(dest, val)
+				return
 
 			case "if":
 				var cond, then, els sexpr.Expr
 				e.Tail().Bind(&cond, &then, &els)
 				v.visitIf(cond, then, els)
+				return
 
 			case "lambda":
 				var vars, body sexpr.Expr
 				e.Tail().Bind(&vars, &body)
 				v.visitLambda(vars, body)
-
-			default:
-				v.visitCall(e)
+				return
 			}
 		}
+
+		v.visitCall(e)
 	}
 
 }
