@@ -1,23 +1,20 @@
 package assert
 
 import (
-	"go/ast"
 	"reflect"
-	"strings"
 	"testing"
 
-	"github.com/kylelemons/godebug/diff"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func Equal[T any](t testing.TB, got, expected T) {
 	t.Helper()
-	if !reflect.DeepEqual(got, expected) {
-		var a, b strings.Builder
-		ast.Fprint(&a, nil, got, ast.NotNilFilter)
-		ast.Fprint(&b, nil, expected, ast.NotNilFilter)
-
-		t.Error("\n" + diff.Diff(b.String(), a.String()))
+	diff := cmp.Diff(expected, got, cmpopts.EquateErrors())
+	if diff == "" {
+		return
 	}
+	t.Error(diff)
 }
 
 func Nil(t testing.TB, got any) {

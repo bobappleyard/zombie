@@ -29,7 +29,7 @@ type closureVisitor struct {
 func (c *closureVisitor) visitBegin(exprs sexpr.Expr) {
 	c.dest.ListStart()
 	c.dest.Atom(sexpr.Symbol, "begin")
-	for _, expr := range exprs.Items() {
+	for _, expr := range exprs.All() {
 		visitExpression(c, expr)
 	}
 	c.dest.ListEnd()
@@ -38,7 +38,7 @@ func (c *closureVisitor) visitBegin(exprs sexpr.Expr) {
 // visitCall implements visitor.
 func (c *closureVisitor) visitCall(call sexpr.Expr) {
 	c.dest.ListStart()
-	for _, expr := range call.Items() {
+	for _, expr := range call.All() {
 		visitExpression(c, expr)
 	}
 	c.dest.ListEnd()
@@ -64,10 +64,10 @@ func (c *closureVisitor) visitIf(cond sexpr.Expr, then sexpr.Expr, els sexpr.Exp
 func (c *closureVisitor) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 	var captured []string
 	args := data.NewSet(strings.Compare)
-	for _, v := range vars.Items() {
+	for _, v := range vars.All() {
 		args.Put(v.UnsafeText())
 	}
-	for v := range freeVars(body).Items() {
+	for v := range freeVars(body).All() {
 		if _, ok := c.globals.Get(v); ok {
 			continue
 		}
@@ -88,7 +88,7 @@ func (c *closureVisitor) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 	for _, v := range captured {
 		c.dest.Atom(sexpr.Symbol, v)
 	}
-	for _, v := range vars.Items() {
+	for _, v := range vars.All() {
 		c.dest.Copy(v)
 	}
 	c.dest.ListEnd()
@@ -108,7 +108,7 @@ func (c *closureVisitor) visitLet(bdgs sexpr.Expr, in sexpr.Expr) {
 	c.dest.ListStart()
 	c.dest.Atom(sexpr.Symbol, "let")
 	c.dest.ListStart()
-	for _, b := range bdgs.Items() {
+	for _, b := range bdgs.All() {
 		var n, v sexpr.Expr
 		b.Bind(&n, &v)
 
@@ -152,14 +152,14 @@ type freeVarsVisitor struct {
 
 // visitBegin implements visitor.
 func (f *freeVarsVisitor) visitBegin(exprs sexpr.Expr) {
-	for _, e := range exprs.Items() {
+	for _, e := range exprs.All() {
 		visitExpression(f, e)
 	}
 }
 
 // visitCall implements visitor.
 func (f *freeVarsVisitor) visitCall(call sexpr.Expr) {
-	for _, e := range call.Items() {
+	for _, e := range call.All() {
 		visitExpression(f, e)
 	}
 }
@@ -178,10 +178,10 @@ func (f *freeVarsVisitor) visitIf(cond sexpr.Expr, then sexpr.Expr, els sexpr.Ex
 // visitLambda implements visitor.
 func (f *freeVarsVisitor) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 	inner := freeVars(body)
-	for _, v := range vars.Items() {
+	for _, v := range vars.All() {
 		inner.Delete(v.UnsafeText())
 	}
-	for v := range inner.Items() {
+	for v := range inner.All() {
 		f.freeVars.Put(v)
 	}
 }
@@ -189,14 +189,14 @@ func (f *freeVarsVisitor) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 // visitLet implements visitor.
 func (f *freeVarsVisitor) visitLet(bdgs sexpr.Expr, in sexpr.Expr) {
 	inner := freeVars(in)
-	for _, b := range bdgs.Items() {
+	for _, b := range bdgs.All() {
 		var n, v sexpr.Expr
 		b.Bind(&n, &v)
 
 		inner.Delete(n.UnsafeText())
 		visitExpression(f, v)
 	}
-	for v := range inner.Items() {
+	for v := range inner.All() {
 		f.freeVars.Put(v)
 	}
 }

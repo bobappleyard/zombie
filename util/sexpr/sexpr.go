@@ -8,16 +8,18 @@ import (
 type Expr struct {
 	text      []byte
 	structure []node
+	scopes    []node
 	pos       int
 }
 
 type Kind int
 
 const (
-	Symbol Kind = iota
+	List Kind = iota
 	String
 	Number
-	List
+	Scope
+	Symbol
 )
 
 type Builder struct {
@@ -27,36 +29,62 @@ type Builder struct {
 }
 
 type node struct {
-	kind       Kind
-	start, end int
+	Kind       Kind
+	Start, End int
 }
 
 func (e Expr) Kind() Kind {
 	if e.pos != 0 {
 		return List
 	}
-	return e.structure[0].kind
+	k := e.node().Kind
+	if k >= Symbol {
+		return Symbol
+	}
+	return k
 }
 
 func (e Expr) Position() int {
-	return e.structure[0].start
+	return e.structure[e.pos].Start
+}
+
+func (e Expr) Scope() string {
+	e.needsSymbol()
+	n := e.node()
+	if n.Kind == Symbol {
+		return ""
+	}
+	node := e.scopes[n.Kind-Symbol-1]
+
+	return string(e.text[node.Start:node.End])
 }
 
 func (e Expr) Text() string {
 	e.needsAtom()
-	node := e.structure[0]
+	node := e.node()
 
-	return string(e.text[node.start:node.end])
+	return string(e.text[node.Start:node.End])
+}
+
+func (e Expr) UnsafeScope() string {
+	e.needsSymbol()
+	n := e.node()
+	if n.Kind == Symbol {
+		return ""
+	}
+	node := e.scopes[n.Kind-Symbol-1]
+
+	return unsafe.String(&e.text[node.Start], node.End-node.Start)
 }
 
 func (e Expr) UnsafeText() string {
 	e.needsAtom()
-	node := e.structure[0]
+	node := e.node()
 
-	return unsafe.String(&e.text[node.start], node.end-node.start)
+	return unsafe.String(&e.text[node.Start], node.End-node.Start)
 }
 
-func (e Expr) Items() iter.Seq2[int, Expr] {
+func (e Expr) All() iter.Seq2[int, Expr] {
 	e.needsList()
 	return func(yield func(int, Expr) bool) {
 		off := 0
@@ -71,7 +99,7 @@ func (e Expr) Items() iter.Seq2[int, Expr] {
 
 func (e Expr) Empty() bool {
 	e.needsList()
-	return e.structure[0].end-max(e.pos, 1) == 0
+	return e.node().End-max(e.pos, 1) == 0
 }
 
 func (e Expr) Head() Expr {
@@ -80,6 +108,7 @@ func (e Expr) Head() Expr {
 	return Expr{
 		text:      e.text,
 		structure: e.structure[p:],
+		scopes:    e.scopes,
 	}
 }
 
@@ -87,33 +116,33 @@ func (e Expr) Tail() Expr {
 	e.needsList()
 	p := max(e.pos, 1)
 	node := e.structure[p]
-	if node.kind == List {
-		p += node.end
+	if node.Kind == List {
+		p += node.End
 	} else {
 		p++
 	}
 	return Expr{
 		text:      e.text,
 		structure: e.structure,
+		scopes:    e.scopes,
 		pos:       p,
 	}
 }
 
 func (e Expr) Bind(parts ...*Expr) bool {
 	e.needsList()
-	i := 0
-	for _, p := range e.Items() {
+	var i int
+	var p Expr
+	for i, p = range e.All() {
 		if i >= len(parts) {
 			return false
 		}
 		if parts[i] == nil {
-			i++
 			continue
 		}
 		*parts[i] = p
-		i++
 	}
-	return i == len(parts)
+	return i+1 == len(parts)
 }
 
 func (e Expr) needsList() {
@@ -128,6 +157,16 @@ func (e Expr) needsAtom() {
 	}
 }
 
+func (e Expr) needsSymbol() {
+	if e.Kind() != Symbol {
+		panic("bad kind")
+	}
+}
+
+func (e Expr) node() node {
+	return e.structure[0]
+}
+
 func (b *Builder) Expr() Expr {
 	return Expr{text: b.text, structure: b.structure}
 }
@@ -136,21 +175,24 @@ func (b *Builder) Atom(kind Kind, value string) {
 	start := len(b.text)
 	b.text = append(b.text, []byte(value)...)
 	b.structure = append(b.structure, node{
-		kind:  kind,
-		start: start,
-		end:   len(b.text),
+		Kind:  kind,
+		Start: start,
+		End:   len(b.text),
 	})
 }
 
 func (b *Builder) ListStart() {
 	b.stack = append(b.stack, len(b.structure))
-	b.structure = append(b.structure, node{kind: List})
+	b.structure = append(b.structure, node{
+		Kind:  List,
+		Start: len(b.text),
+	})
 }
 
 func (b *Builder) ListEnd() {
 	start := b.stack[len(b.stack)-1]
 	b.stack = b.stack[:len(b.stack)-1]
-	b.structure[start].end = len(b.structure) - start
+	b.structure[start].End = len(b.structure) - start
 }
 
 func (b *Builder) Copy(e Expr) {

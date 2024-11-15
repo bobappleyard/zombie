@@ -1,6 +1,10 @@
 package compiler
 
-import "github.com/bobappleyard/zombie/util/sexpr"
+import (
+	"fmt"
+
+	"github.com/bobappleyard/zombie/util/sexpr"
+)
 
 type visitor interface {
 	visitNumber(x string)
@@ -16,6 +20,8 @@ type visitor interface {
 }
 
 func visitExpression(v visitor, e sexpr.Expr) {
+	fmt.Println("VISIT ", sexpr.WriteString(e))
+
 	switch e.Kind() {
 	case sexpr.Number:
 		v.visitNumber(e.UnsafeText())

@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -20,43 +21,60 @@ const (
 	procedureCallFunc = 0
 	isTrueFunc        = 1
 
-	funcBaseGlobal = 0
+	firstFunc = 1
+
+	funcBaseGlobal    = 0
+	packageDefsGlobal = 1
 )
 
 type pkg struct {
 	funcs   []wasm.Func
-	initFn  wasm.Func
+	initFn  procedure
 	globals data.Set[binding]
+}
+
+type procedure struct {
+	wasm.Expr
+
+	bindings data.Set[binding]
+}
+
+func (p procedure) toWasmFunc() wasm.Func {
+	return wasm.Func{
+		Locals: []wasm.LocalDecl{{Count: 2, Type: wasm.Int32}},
+		Expr:   p.Expr,
+	}
 }
 
 func newPkg() *pkg {
 	p := &pkg{
 		globals: *data.NewSet(binding.compare),
 	}
-	p.initFn.Locals = []wasm.LocalDecl{{
-		Count: 2,
-		Type:  wasm.Int32,
-	}}
 	return p
 }
 
 func (p *pkg) compileToplevel(e sexpr.Expr) {
-	if e.Kind() != sexpr.List {
-		return
-	}
-	if e.Empty() {
-		return
-	}
-	if e.Head().Kind() == sexpr.Symbol {
-
+	for v := range freeVars(e).All() {
+		if _, ok := p.globals.Get(binding{name: v}); ok {
+			continue
+		}
+		p.globals.Put(binding{
+			name:     v,
+			kind:     &globalKind{},
+			position: p.globals.Size(),
+		})
 	}
 	c := &compiler{
 		pkg:      p,
 		bindings: *p.globals.Clone(),
-		dest:     p.initFn,
+		dest:     &p.initFn,
 	}
-	visitExpression(c, e)
-	p.initFn = c.dest
+	var b sexpr.Builder
+	flattenCalls(&b, e)
+
+	fmt.Print("\n\n------------------------\n\n")
+
+	visitExpression(c, b.Expr())
 	// p.initFn.Drop()
 }
 
@@ -65,6 +83,8 @@ func (p *pkg) module() wasm.Module {
 	p.initFn.End()
 
 	pref := wasm.Func{}
+	pref.I32Const(32 * 1024)
+	pref.GlobalSet(packageDefsGlobal)
 	pref.NullFunc()
 	pref.I32Const(int32(len(p.funcs)))
 	pref.TableGrow(0)
@@ -74,26 +94,29 @@ func (p *pkg) module() wasm.Module {
 	pref.I32Const(int32(len(p.funcs)))
 	pref.TableInit(0, 0)
 
+	// HACK: need to work out how much to actually reserve
+	pref.LocalGet(argBaseLocal)
+	pref.LocalSet(callBaseLocal)
+
 	p.initFn.Instructions = append(pref.Instructions, p.initFn.Instructions...)
 
 	g := wasm.GlobalDecl{Type: wasm.Int32}
 	g.Init.I32Const(0)
 	g.Init.End()
 
-	funcs := make([]wasm.Index[wasm.Type], len(p.funcs)+1)
 	elements := make([]wasm.Index[wasm.Func], len(p.funcs))
 	for i := range elements {
-		elements[i] = wasm.Index[wasm.Func](i + 1)
+		elements[i] = wasm.Index[wasm.Func](i + firstFunc)
 	}
 
 	return wasm.Module{
-		Globals: []wasm.GlobalDecl{g},
+		Globals: []wasm.GlobalDecl{g, g},
 		Types: []wasm.Type{wasm.FuncType{
 			In:  []wasm.Type{wasm.Int32, wasm.Int32},
 			Out: []wasm.Type{wasm.Int32},
 		}},
-		Codes: append(p.funcs, p.initFn),
-		Funcs: funcs,
+		Codes: append(p.funcs, p.initFn.toWasmFunc()),
+		Funcs: make([]wasm.Index[wasm.Type], len(p.funcs)+1),
 		Elements: []wasm.Element{
 			&wasm.FuncElement{Funcs: elements},
 		},
@@ -104,14 +127,14 @@ func (p *pkg) module() wasm.Module {
 		},
 		Exports: []wasm.Export{wasm.FuncExport{
 			Name: "test",
-			Func: wasm.Index[wasm.Func](len(p.funcs) + 1),
+			Func: wasm.Index[wasm.Func](len(p.funcs) + firstFunc),
 		}},
 	}
 }
 
 type compiler struct {
 	pkg      *pkg
-	dest     wasm.Func
+	dest     *procedure
 	base     int
 	tail     bool
 	bindings data.Set[binding]
@@ -119,7 +142,7 @@ type compiler struct {
 
 // visitBegin implements visitor.
 func (e *compiler) visitBegin(exprs sexpr.Expr) {
-	for i, expr := range exprs.Items() {
+	for i, expr := range exprs.All() {
 		if i != 0 {
 			e.dest.Drop()
 		}
@@ -131,7 +154,7 @@ func (e *compiler) visitBegin(exprs sexpr.Expr) {
 func (e *compiler) visitCall(call sexpr.Expr) {
 	n := exprLen(call)
 
-	for i, expr := range call.Items() {
+	for i, expr := range call.All() {
 		e.dest.LocalGet(callBaseLocal)
 		// note that if the call is in tail position, these will be evaluated in tail position as
 		// well. this is not technically accurate, however all nested calls have been factored out
@@ -145,8 +168,10 @@ func (e *compiler) visitCall(call sexpr.Expr) {
 		// new arg base
 		e.dest.LocalGet(argBaseLocal)
 		e.dest.LocalGet(argCountLocal)
+		e.dest.I32Const(wordSize)
+		e.dest.I32Mul()
 		e.dest.I32Add()
-		e.dest.I32Const(int32(n))
+		e.dest.I32Const(int32(n) * wordSize)
 		e.dest.I32Sub()
 		e.dest.LocalSet(argBaseLocal)
 
@@ -175,7 +200,14 @@ func (e *compiler) visitEmpty() {
 
 // visitIf implements visitor.
 func (e *compiler) visitIf(cond sexpr.Expr, then sexpr.Expr, els sexpr.Expr) {
-	visitExpression(e, cond)
+	condC := &compiler{
+		pkg:      e.pkg,
+		dest:     e.dest,
+		base:     e.base,
+		tail:     false,
+		bindings: e.bindings,
+	}
+	visitExpression(condC, cond)
 	e.dest.Call(isTrueFunc)
 	e.dest.If()
 	visitExpression(e, then)
@@ -201,13 +233,13 @@ func (e *compiler) visitLambda(vars sexpr.Expr, body sexpr.Expr) {
 func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 	// prepare env
 	bindings := data.NewSet(binding.compare)
-	for outer := range e.bindings.Items() {
+	for outer := range e.bindings.All() {
 		if _, ok := outer.kind.(*globalKind); !ok {
 			continue
 		}
 		bindings.Put(outer)
 	}
-	for i, v := range vars.Items() {
+	for i, v := range vars.All() {
 		bindings.Put(binding{
 			name:     v.UnsafeText(),
 			kind:     &argKind{},
@@ -217,13 +249,8 @@ func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 
 	//compile the function
 	c := &compiler{
-		pkg: e.pkg,
-		dest: wasm.Func{
-			Locals: []wasm.LocalDecl{{
-				Count: 2,
-				Type:  wasm.Int32,
-			}},
-		},
+		pkg:      e.pkg,
+		dest:     &procedure{},
 		tail:     true,
 		base:     0,
 		bindings: *bindings,
@@ -231,6 +258,7 @@ func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 
 	// prolog
 	args, locals := neededSlots(body)
+	fmt.Println(args, locals)
 
 	c.dest.LocalGet(argCountLocal)
 	c.dest.I32Const(int32(exprLen(vars)))
@@ -250,7 +278,7 @@ func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 	c.dest.End()
 
 	id := len(e.pkg.funcs)
-	e.pkg.funcs = append(e.pkg.funcs, c.dest)
+	e.pkg.funcs = append(e.pkg.funcs, c.dest.toWasmFunc())
 
 	return int32(id)
 }
@@ -258,32 +286,34 @@ func (e *compiler) compileProcedure(vars sexpr.Expr, body sexpr.Expr) int32 {
 // visitLet implements visitor.
 func (e *compiler) visitLet(bdgs sexpr.Expr, in sexpr.Expr) {
 	bindings := data.NewSet(binding.compare)
-	for outer := range e.bindings.Items() {
+	for outer := range e.bindings.All() {
 		bindings.Put(outer)
 	}
 
-	for i, b := range bdgs.Items() {
+	for i, b := range bdgs.All() {
 		var n, v sexpr.Expr
 		b.Bind(&n, &v)
 
 		inner := &compiler{
+			pkg:      e.pkg,
 			dest:     e.dest,
 			base:     e.base + i,
 			tail:     false,
 			bindings: e.bindings,
 		}
-		inner.base += i
 		e.dest.LocalGet(varBaseLocal)
 		visitExpression(inner, v)
 		e.dest.I32Store(2, uint32(inner.base)*wordSize)
 
 		bindings.Put(binding{
-			name:     v.UnsafeText(),
+			name:     n.UnsafeText(),
+			kind:     &localKind{},
 			position: i,
 		})
 	}
 
 	f := &compiler{
+		pkg:      e.pkg,
 		dest:     e.dest,
 		base:     e.base + exprLen(bdgs),
 		tail:     e.tail,
@@ -312,7 +342,7 @@ func (e *compiler) visitNumber(s string) {
 // visitSet implements visitor.
 func (e *compiler) visitSet(dest sexpr.Expr, val sexpr.Expr) {
 	b, _ := e.bindings.Get(binding{name: dest.UnsafeText()})
-	b.kind.setCode(&e.dest, b.position, func(f *wasm.Func) {
+	b.kind.setCode(e.dest, b.position, func(f *procedure) {
 		visitExpression(e, val)
 	})
 }
@@ -325,5 +355,5 @@ func (e *compiler) visitString(x string) {
 // visitSymbol implements visitor.
 func (e *compiler) visitSymbol(x string) {
 	b, _ := e.bindings.Get(binding{name: x})
-	b.kind.getCode(&e.dest, b.position)
+	b.kind.getCode(e.dest, b.position)
 }

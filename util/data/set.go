@@ -53,7 +53,7 @@ func (s *Set[T]) Delete(x T) {
 	s.items = s.items[:len(s.items)-1]
 }
 
-func (s *Set[T]) Items() iter.Seq[T] {
+func (s *Set[T]) All() iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for _, x := range s.items {
 			if !yield(x) {

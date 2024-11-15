@@ -52,6 +52,14 @@ func TestFlattenCall(t *testing.T) {
 			in:   "(lambda () (f (g x)))",
 			out:  "(lambda () (let ((v0 (g x))) (f v0)))",
 		},
+		{
+			name: "Codegen",
+			in: `	(let ((f (lambda (x)
+	           (let ((f (lambda (x) x)))
+			    (test (f x))))))
+      (f 1))
+	  `,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			e, _, _ := sexpr.Read([]byte(test.in))

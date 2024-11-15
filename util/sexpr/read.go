@@ -1,6 +1,7 @@
 package sexpr
 
 import (
+	"bytes"
 	"errors"
 	"io"
 )
@@ -9,11 +10,13 @@ var (
 	ErrUnmatchedParentheses = errors.New("unmatched parentheses")
 	ErrNumberSyntaxError    = errors.New("number syntax error")
 	ErrStringSyntaxError    = errors.New("string syntax error")
+	ErrScopeSyntaxError     = errors.New("scope syntax error")
 )
 
 type reader struct {
 	text      []byte
 	structure []node
+	scopes    []node
 	pos       int
 }
 
@@ -29,6 +32,7 @@ func Read(src []byte) (Expr, []byte, error) {
 	res := Expr{
 		text:      src[:p.pos+1],
 		structure: p.structure,
+		scopes:    p.scopes,
 	}
 	return res, src[p.pos+1:], nil
 }
@@ -68,12 +72,12 @@ func (p *reader) parse() error {
 
 func (p *reader) parseList() error {
 	nodePos := len(p.structure)
-	p.structure = append(p.structure, node{kind: List, start: p.pos})
+	p.structure = append(p.structure, node{Kind: List, Start: p.pos})
 
 	for {
 		err := p.parse()
 		if err == ErrUnmatchedParentheses {
-			p.structure[nodePos].end = len(p.structure) - nodePos
+			p.structure[nodePos].End = len(p.structure) - nodePos
 			return nil
 		}
 		if err != nil {
@@ -149,6 +153,8 @@ func (p *reader) parseString() error {
 }
 
 func (p *reader) parseSymbol(start int) error {
+	scope := 0
+
 loop:
 	for {
 		p.pos++
@@ -158,20 +164,48 @@ loop:
 		}
 
 		switch p.text[p.pos] {
+		case ':':
+			if scope != 0 {
+				continue
+			}
+			scope = p.addScope(start)
+			p.pos++
+			start = p.pos + 1
+
 		case ' ', '\n', '\t', '\r', '(', ')':
 			break loop
 		}
 	}
 
-	p.addNode(Symbol, start)
+	if start == p.pos {
+		return ErrScopeSyntaxError
+	}
+
+	p.addNode(Symbol+Kind(scope), start)
 	return nil
 }
 
 func (p *reader) addNode(kind Kind, start int) {
 	p.structure = append(p.structure, node{
-		kind:  kind,
-		start: start,
-		end:   p.pos,
+		Kind:  kind,
+		Start: start,
+		End:   p.pos,
 	})
 	p.pos--
+}
+
+func (p *reader) addScope(start int) int {
+	scope := p.text[start:p.pos]
+	for i, s := range p.scopes {
+		if !bytes.Equal(p.text[s.Start:s.End], scope) {
+			continue
+		}
+		p.pos--
+		return i + 1
+	}
+	p.scopes = append(p.scopes, node{
+		Start: start, End: p.pos,
+	})
+	p.pos--
+	return len(p.scopes)
 }

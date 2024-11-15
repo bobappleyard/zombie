@@ -17,7 +17,7 @@ func flattenCalls(dest *sexpr.Builder, e sexpr.Expr) {
 		case "begin", "set!", "if":
 			dest.ListStart()
 			dest.Atom(sexpr.Symbol, e.Head().UnsafeText())
-			for _, e := range e.Tail().Items() {
+			for _, e := range e.Tail().All() {
 				flattenCalls(dest, e)
 			}
 			dest.ListEnd()
@@ -30,7 +30,7 @@ func flattenCalls(dest *sexpr.Builder, e sexpr.Expr) {
 			dest.ListStart()
 			dest.Atom(sexpr.Symbol, "let")
 			dest.ListStart()
-			for _, b := range bdgs.Items() {
+			for _, b := range bdgs.All() {
 				var name, value sexpr.Expr
 				b.Bind(&name, &value)
 				dest.ListStart()
@@ -67,7 +67,7 @@ func flattenCalls(dest *sexpr.Builder, e sexpr.Expr) {
 	}
 
 	var nested []sexpr.Expr
-	for _, e := range e.Items() {
+	for _, e := range e.All() {
 		if isNestedCall(e) {
 			nested = append(nested, e)
 		}
@@ -88,7 +88,7 @@ func flattenCalls(dest *sexpr.Builder, e sexpr.Expr) {
 
 	i := 0
 	dest.ListStart()
-	for _, e := range e.Items() {
+	for _, e := range e.All() {
 		if isNestedCall(e) {
 			dest.Atom(sexpr.Symbol, fmt.Sprintf("v%d", i))
 			i++

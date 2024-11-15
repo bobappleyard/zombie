@@ -3,6 +3,7 @@ package compiler
 import (
 	"testing"
 
+	"github.com/bobappleyard/zombie/util/assert"
 	"github.com/bobappleyard/zombie/util/sexpr"
 	"github.com/bobappleyard/zombie/util/wasm"
 	"github.com/bytecodealliance/wasmtime-go/v23"
@@ -12,7 +13,11 @@ func TestCodegen(t *testing.T) {
 	engine := wasmtime.NewEngine()
 	store := wasmtime.NewStore(engine)
 
-	e, _, _ := sexpr.Read([]byte(`((lambda (x) x) 1)`))
+	e, _, _ := sexpr.Read([]byte(`
+
+	(let ((f (lambda (x) (test x)))) (f 1))
+
+	`))
 
 	p := newPkg()
 
@@ -49,16 +54,52 @@ func TestCodegen(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	assert.Nil(t, instance)
+
 	f := instance.GetFunc(store, "test")
-	x, err := f.Call(store, 16*1024, 2)
+	x, err := f.Call(store, int32(16*1024), int32(2))
 	if err != nil {
 		t.Error(err)
 	}
 
-	t.Error(x.(int32))
+	if x != nil {
+		t.Error(x.(int32))
+	}
 }
 
 func runtimeModule(e *wasmtime.Engine, s *wasmtime.Store, mem *wasmtime.Memory, table *wasmtime.Table) (*wasmtime.Instance, error) {
+	m := wasm.Module{
+		Types: []wasm.Type{
+			wasm.FuncType{
+				In:  []wasm.Type{wasm.Int32, wasm.Int32},
+				Out: []wasm.Type{wasm.Int32},
+			},
+			wasm.FuncType{
+				In:  []wasm.Type{wasm.Int32},
+				Out: []wasm.Type{wasm.Int32},
+			},
+		},
+		Codes: []wasm.Func{callProcedure(), isTrue()},
+		Funcs: []wasm.Index[wasm.Type]{0, 1},
+		Imports: []wasm.Import{
+			wasm.MemoryImport{Type: wasm.MinMemory{}},
+			wasm.TableImport{},
+		},
+		Exports: []wasm.Export{
+			wasm.FuncExport{Name: "call-procedure", Func: 0},
+			wasm.FuncExport{Name: "true?", Func: 1},
+		},
+	}
+
+	mod, err := wasmtime.NewModule(e, m.AppendWasm(nil))
+	if err != nil {
+		return nil, err
+	}
+
+	return wasmtime.NewInstance(s, mod, []wasmtime.AsExtern{mem, table})
+}
+
+func callProcedure() wasm.Func {
 	f := wasm.Func{
 		Locals: []wasm.LocalDecl{{Count: 1, Type: wasm.Int32}},
 	}
@@ -87,27 +128,14 @@ func runtimeModule(e *wasmtime.Engine, s *wasmtime.Store, mem *wasmtime.Memory, 
 	f.I32Const(0)
 	f.End()
 
-	m := wasm.Module{
-		Types: []wasm.Type{wasm.FuncType{
-			In:  []wasm.Type{wasm.Int32, wasm.Int32},
-			Out: []wasm.Type{wasm.Int32},
-		}},
-		Codes: []wasm.Func{f},
-		Funcs: make([]wasm.Index[wasm.Type], 1),
-		Imports: []wasm.Import{
-			wasm.MemoryImport{Type: wasm.MinMemory{}},
-			wasm.TableImport{},
-		},
-		Exports: []wasm.Export{wasm.FuncExport{
-			Name: "call-procedure",
-			Func: 0,
-		}},
-	}
+	return f
+}
 
-	mod, err := wasmtime.NewModule(e, m.AppendWasm(nil))
-	if err != nil {
-		return nil, err
-	}
-
-	return wasmtime.NewInstance(s, mod, []wasmtime.AsExtern{mem, table})
+func isTrue() wasm.Func {
+	f := wasm.Func{}
+	f.LocalGet(0)
+	f.I32Const(9)
+	f.I32Ne()
+	f.End()
+	return f
 }

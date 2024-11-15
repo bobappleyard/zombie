@@ -37,7 +37,7 @@ func TestSet(t *testing.T) {
 
 	s.Put("a")
 
-	for x := range s.Items() {
+	for x := range s.All() {
 		assert.Equal(t, x, "a")
 		break
 	}

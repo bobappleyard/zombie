@@ -10,7 +10,7 @@ func neededSlots(e sexpr.Expr) (args, vars int) {
 	if e.Head().Kind() == sexpr.Symbol {
 		switch e.Head().UnsafeText() {
 		case "begin", "set!", "if":
-			for _, e := range e.Tail().Items() {
+			for _, e := range e.Tail().All() {
 				a, v := neededSlots(e)
 				args = max(args, a)
 				vars = max(vars, v)
@@ -23,7 +23,7 @@ func neededSlots(e sexpr.Expr) (args, vars int) {
 
 			args, vars = neededSlots(in)
 			vars = max(vars, exprLen(bdgs))
-			for i, b := range bdgs.Items() {
+			for i, b := range bdgs.All() {
 				var val sexpr.Expr
 				b.Bind(nil, &val)
 
@@ -46,7 +46,7 @@ func neededSlots(e sexpr.Expr) (args, vars int) {
 
 func exprLen(e sexpr.Expr) int {
 	i := 0
-	for range e.Items() {
+	for range e.All() {
 		i++
 	}
 	return i

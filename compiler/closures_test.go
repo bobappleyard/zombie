@@ -95,7 +95,7 @@ func TestFreeVars(t *testing.T) {
 				}
 				got.Delete(v)
 			}
-			for v := range got.Items() {
+			for v := range got.All() {
 				t.Errorf("found but not expected: %q", v)
 			}
 		})

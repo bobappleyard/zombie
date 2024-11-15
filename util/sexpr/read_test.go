@@ -16,64 +16,80 @@ func TestParser(t *testing.T) {
 		{
 			"Digit",
 			"1",
-			[]node{{kind: Number, start: 0, end: 1}},
+			[]node{{Kind: Number, Start: 0, End: 1}},
 		},
 		{
 			"Int",
 			"123",
-			[]node{{kind: Number, start: 0, end: 3}},
+			[]node{{Kind: Number, Start: 0, End: 3}},
 		},
 		{
 			"Real",
 			"123.456",
-			[]node{{kind: Number, start: 0, end: 7}},
+			[]node{{Kind: Number, Start: 0, End: 7}},
 		},
 		{
 			"Symbol",
 			"+",
-			[]node{{kind: Symbol, start: 0, end: 1}},
+			[]node{{Kind: Symbol, Start: 0, End: 1}},
 		},
 		{
 			"NumSymbol",
 			"1+",
-			[]node{{kind: Symbol, start: 0, end: 2}},
+			[]node{{Kind: Symbol, Start: 0, End: 2}},
+		},
+		{
+			"ScopedSymbol",
+			"a:b",
+			[]node{
+				{Kind: Symbol + 1, Start: 2, End: 3},
+			},
 		},
 		{
 			"String",
 			"\"hello\"",
-			[]node{{kind: String, start: 0, end: 7}},
+			[]node{{Kind: String, Start: 0, End: 7}},
 		},
 		{
 			"EscapeString",
 			"\"hell\\no\"",
-			[]node{{kind: String, start: 0, end: 9}},
+			[]node{{Kind: String, Start: 0, End: 9}},
 		},
 		{
 			"Empty",
 			"()",
 			[]node{
-				{kind: List, end: 1},
+				{Kind: List, End: 1},
 			},
 		},
 		{
 			"List",
 			"(a 16 b)",
 			[]node{
-				{kind: List, end: 4},
-				{kind: Symbol, start: 1, end: 2},
-				{kind: Number, start: 3, end: 5},
-				{kind: Symbol, start: 6, end: 7},
+				{Kind: List, End: 4},
+				{Kind: Symbol, Start: 1, End: 2},
+				{Kind: Number, Start: 3, End: 5},
+				{Kind: Symbol, Start: 6, End: 7},
+			},
+		},
+		{
+			"ScopedSymbolList",
+			"(a:a a:b)",
+			[]node{
+				{Kind: List, End: 3},
+				{Kind: Symbol + 1, Start: 3, End: 4},
+				{Kind: Symbol + 1, Start: 7, End: 8},
 			},
 		},
 		{
 			"Tree",
 			"(a 16 (b))",
 			[]node{
-				{kind: List, end: 5},
-				{kind: Symbol, start: 1, end: 2},
-				{kind: Number, start: 3, end: 5},
-				{kind: List, start: 6, end: 2},
-				{kind: Symbol, start: 7, end: 8},
+				{Kind: List, End: 5},
+				{Kind: Symbol, Start: 1, End: 2},
+				{Kind: Number, Start: 3, End: 5},
+				{Kind: List, Start: 6, End: 2},
+				{Kind: Symbol, Start: 7, End: 8},
 			},
 		},
 	} {
@@ -81,7 +97,6 @@ func TestParser(t *testing.T) {
 			expr, rest, err := Read([]byte(test.in))
 			assert.Nil(t, err)
 			assert.Equal(t, rest, []byte{})
-			t.Log(expr.structure)
 			assert.Equal(t, expr.structure, test.out)
 		})
 	}
@@ -123,6 +138,16 @@ func TestParserErrors(t *testing.T) {
 			"\"a\n",
 			ErrStringSyntaxError,
 		},
+		{
+			"ScopeEOF",
+			"a:",
+			ErrScopeSyntaxError,
+		},
+		{
+			"ScopeWhitespace",
+			"a: ",
+			ErrScopeSyntaxError,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, _, err := Read([]byte(test.in))
@@ -148,5 +173,30 @@ func TestParseIter(t *testing.T) {
 	expr, _, err := Read([]byte(src))
 	assert.Nil(t, err)
 	assert.Equal(t, expr.Kind(), List)
+
+}
+
+func TestScopeParse(t *testing.T) {
+	src := `(zombie.core:define zombie.internal:size zombie.internal.size)`
+
+	expr, _, err := Read([]byte(src))
+	assert.Nil(t, err)
+
+	assert.Equal(t, expr.Kind(), List)
+	assert.Equal(t, expr.Head().Kind(), Symbol)
+	assert.Equal(t, expr.Head().UnsafeScope(), "zombie.core")
+	assert.Equal(t, expr.Head().UnsafeText(), "define")
+
+	expr = expr.Tail()
+	assert.Equal(t, expr.Kind(), List)
+	assert.Equal(t, expr.Head().Kind(), Symbol)
+	assert.Equal(t, expr.Head().UnsafeScope(), "zombie.internal")
+	assert.Equal(t, expr.Head().UnsafeText(), "size")
+
+	expr = expr.Tail()
+	assert.Equal(t, expr.Kind(), List)
+	assert.Equal(t, expr.Head().Kind(), Symbol)
+	assert.Equal(t, expr.Head().UnsafeScope(), "")
+	assert.Equal(t, expr.Head().UnsafeText(), "zombie.internal.size")
 
 }
