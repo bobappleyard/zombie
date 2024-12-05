@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/bobappleyard/zombie/util/assert"
-	"github.com/bytecodealliance/wasmtime-go/v23"
+	"github.com/bytecodealliance/wasmtime-go/v27"
 )
 
 func TestTables(t *testing.T) {

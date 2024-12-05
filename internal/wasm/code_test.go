@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/bobappleyard/zombie/util/assert"
-	"github.com/bytecodealliance/wasmtime-go/v23"
+	"github.com/bytecodealliance/wasmtime-go/v27"
 )
 
 func TestConst(t *testing.T) {
@@ -260,6 +260,20 @@ func TestGlobal(t *testing.T) {
 	addTestFunc(&m, *f)
 
 	testModule(t, m, 1, 5)
+}
+
+func TestGC(t *testing.T) {
+	var m Module
+
+	m.Types = append(m.Types, StructType{Fields: []Field{{Int32}}})
+
+	f := new(Func)
+	f.StructNew(0)
+	f.LocalGet(0)
+
+	addTestFunc(&m, *f)
+
+	testModule(t, m, 1, 1)
 }
 
 func addTestFunc(m *Module, f Func) {

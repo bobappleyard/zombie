@@ -1,7 +1,6 @@
 package sexpr
 
 import (
-	"bytes"
 	"errors"
 	"io"
 )
@@ -16,7 +15,6 @@ var (
 type reader struct {
 	text      []byte
 	structure []node
-	scopes    []node
 	pos       int
 }
 
@@ -32,7 +30,6 @@ func Read(src []byte) (Expr, []byte, error) {
 	res := Expr{
 		text:      src[:p.pos+1],
 		structure: p.structure,
-		scopes:    p.scopes,
 	}
 	return res, src[p.pos+1:], nil
 }
@@ -49,6 +46,9 @@ func (p *reader) parse() error {
 		}
 
 		switch p.text[p.pos] {
+		case ';':
+			p.ignoreComment()
+
 		case ' ', '\n', '\t', '\r':
 			// do nothing
 
@@ -70,14 +70,24 @@ func (p *reader) parse() error {
 	}
 }
 
+func (p *reader) ignoreComment() {
+	for {
+		p.pos++
+
+		if p.pos >= len(p.text) || p.text[p.pos] == '\n' {
+			return
+		}
+	}
+}
+
 func (p *reader) parseList() error {
 	nodePos := len(p.structure)
-	p.structure = append(p.structure, node{Kind: List, Start: p.pos})
+	p.structure = append(p.structure, node{kind: List, start: p.pos})
 
 	for {
 		err := p.parse()
 		if err == ErrUnmatchedParentheses {
-			p.structure[nodePos].End = len(p.structure) - nodePos
+			p.structure[nodePos].end = len(p.structure) - nodePos
 			return nil
 		}
 		if err != nil {
@@ -88,7 +98,7 @@ func (p *reader) parseList() error {
 
 func (p *reader) parseNumber() error {
 	start := p.pos
-	hasDigits := true
+	hasDigits := p.text[p.pos] != '-'
 	integer := true
 
 loop:
@@ -118,6 +128,10 @@ loop:
 		}
 	}
 
+	if p.text[p.pos-1] == '-' {
+		p.addNode(Symbol, start)
+		return nil
+	}
 	if !hasDigits {
 		return io.ErrUnexpectedEOF
 	}
@@ -153,8 +167,6 @@ func (p *reader) parseString() error {
 }
 
 func (p *reader) parseSymbol(start int) error {
-	scope := 0
-
 loop:
 	for {
 		p.pos++
@@ -164,14 +176,6 @@ loop:
 		}
 
 		switch p.text[p.pos] {
-		case ':':
-			if scope != 0 {
-				continue
-			}
-			scope = p.addScope(start)
-			p.pos++
-			start = p.pos + 1
-
 		case ' ', '\n', '\t', '\r', '(', ')':
 			break loop
 		}
@@ -181,31 +185,15 @@ loop:
 		return ErrScopeSyntaxError
 	}
 
-	p.addNode(Symbol+Kind(scope), start)
+	p.addNode(Symbol, start)
 	return nil
 }
 
 func (p *reader) addNode(kind Kind, start int) {
 	p.structure = append(p.structure, node{
-		Kind:  kind,
-		Start: start,
-		End:   p.pos,
+		kind:  kind,
+		start: start,
+		end:   p.pos,
 	})
 	p.pos--
-}
-
-func (p *reader) addScope(start int) int {
-	scope := p.text[start:p.pos]
-	for i, s := range p.scopes {
-		if !bytes.Equal(p.text[s.Start:s.End], scope) {
-			continue
-		}
-		p.pos--
-		return i + 1
-	}
-	p.scopes = append(p.scopes, node{
-		Start: start, End: p.pos,
-	})
-	p.pos--
-	return len(p.scopes)
 }

@@ -4,17 +4,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
+	"github.com/bobappleyard/zombie/internal/assert"
 )
 
 func TestBuild(t *testing.T) {
 	var b Builder
-
 	b.ListStart()
-	b.Atom(Symbol, "a")
-	b.Atom(Symbol, "b")
+	b.Symbol("a")
+	b.Symbol("b")
 	b.ListStart()
-	b.Atom(Symbol, "c")
+	b.Symbol("c")
 	b.ListEnd()
 	b.ListEnd()
 
