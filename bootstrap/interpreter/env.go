@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -17,6 +18,7 @@ type Env struct {
 
 type Pkg struct {
 	owner   *Env
+	path    string
 	defs    map[string]any
 	init    bool
 	exports []string
@@ -29,7 +31,8 @@ func newEnv(path string) *Env {
 	}
 }
 
-func (p *Pkg) Eval(e sexpr.Expr) error {
+func (p *Pkg) Eval(e sexpr.Expr) (err error) {
+	defer attachTrace(&err, p.path, e)
 	if e.Kind() == sexpr.List && e.Head().Kind() == sexpr.Symbol {
 		switch e.Head().UnsafeText() {
 		case "import":
@@ -42,7 +45,7 @@ func (p *Pkg) Eval(e sexpr.Expr) error {
 			return p.evalDefine(e.Tail())
 		}
 	}
-	_, err := p.evalExpr(e)
+	_, err = p.evalExpr(e)
 	return err
 }
 
@@ -58,10 +61,17 @@ func (e *Env) Import(name string) (*Pkg, error) {
 		return nil, err
 	}
 	p := &Pkg{
+		path:  name,
 		owner: e,
 		defs:  map[string]any{},
 	}
 	e.pkgs[name] = p
+	if name != "zombie" {
+		err = p.Import("zombie")
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = p.evalFile(src)
 	if err != nil {
 		return nil, err
@@ -84,7 +94,11 @@ func (p *Pkg) Import(name string) error {
 		return err
 	}
 	for _, v := range q.exports {
-		p.defs[v] = q.defs[v]
+		d, ok := q.defs[v]
+		if !ok {
+			return fmt.Errorf("%s: %w", v, ErrUnboundVar)
+		}
+		p.defs[v] = d
 	}
 	return nil
 }

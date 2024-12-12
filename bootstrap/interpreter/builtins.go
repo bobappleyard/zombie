@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 func registerBuiltins(e *Env) {
 	e.Define("zombie.internal.builtins", map[string]any{
@@ -22,43 +25,91 @@ func registerBuiltins(e *Env) {
 		">":       liftProcedure(func(a, b int) bool { return a > b }),
 		"<":       liftProcedure(func(a, b int) bool { return a < b }),
 
-		"make-type": liftProcedure(func(name string, size int) *CustomType {
-			return &CustomType{
+		"vector": builtinProcedure(func(p *process) {
+			v := make([]any, p.argc)
+			copy(v, p.args[:])
+			p.returnValue(v)
+		}),
+		"make-vector": liftProcedure(func(n int, of any) []any {
+			v := make([]any, n)
+			for i := range v {
+				v[i] = of
+			}
+			return v
+		}),
+		"vector?": liftProcedure(testType[[]any]),
+		"vector-length": liftProcedure(func(xs []any) int {
+			return len(xs)
+		}),
+		"vector-ref": liftProcedure(func(v []any, idx int) any {
+			return v[idx]
+		}),
+		"vector-set!": liftProcedure(func(v []any, idx int, value any) {
+			v[idx] = value
+		}),
+
+		"make-struct-type": liftProcedure(func(name string, size int) *StructType {
+			return &StructType{
 				name: name,
 				size: size,
 			}
 		}),
-		"is?": liftProcedure(func(t *CustomType, x any) bool {
-			if x, ok := x.(*CustomObject); ok {
-				return x.of == t
+		"make-struct": builtinProcedure(func(p *process) {
+			if p.argc < 1 {
+				p.fail(ErrWrongArgCount)
+				return
 			}
-			return false
-		}),
-		"cell-accessor": liftProcedure(func(t *CustomType, idx int) (*CellAccessor, error) {
-			if idx < 0 || idx >= t.size {
-				return nil, ErrInvalidCellAccessor
+			t := p.args[0].(*StructType)
+			if p.argc != t.size+1 {
+				p.fail(ErrWrongArgCount)
+				return
 			}
-			return &CellAccessor{
-				of:  t,
-				idx: idx,
-			}, nil
-		}),
-		"make": liftProcedure(func(t *CustomType) *CustomObject {
-			return &CustomObject{of: t, data: make([]any, t.size)}
-		}),
-		"cell-ref": liftProcedure(func(a *CellAccessor, x *CustomObject) (any, error) {
-			if x.of != a.of {
-				return nil, ErrWrongType
+			o := &Struct{
+				of:   t,
+				data: make([]any, t.size),
 			}
-			return x.data[a.idx], nil
+			copy(o.data, p.args[1:])
+			p.returnValue(o)
 		}),
-		"cell-set!": liftProcedure(func(a *CellAccessor, x *CustomObject, value any) error {
-			if x.of != a.of {
-				return ErrWrongType
+		"struct-is?": liftProcedure(func(t *StructType, x any) bool {
+			o, ok := x.(*Struct)
+			return ok && o.of == t
+		}),
+		"bind-struct": builtinProcedure(func(p *process) {
+			if p.argc != 3 {
+				p.fail(ErrWrongArgCount)
+				return
 			}
-			x.data[a.idx] = value
-			return nil
+			t := p.args[0].(*StructType)
+			o := p.args[1].(*Struct)
+			f := p.args[2].(procedure)
+			if o.of != t {
+				p.fail(ErrWrongType)
+				return
+			}
+			p.call(f, o.data, true)
 		}),
+
+		"buffer?": liftProcedure(testType[[]byte]),
+		"make-buffer": liftProcedure(func(n int) []byte {
+			return make([]byte, n)
+		}),
+		"buffer-segment": liftProcedure(func(buf []byte, start, end int) []byte {
+			return buf[start:end]
+		}),
+		"buffer-length": liftProcedure(func(b []byte) int { return len(b) }),
+		"buffer-ref": liftProcedure(func(buf []byte, idx int) int {
+			return int(buf[idx])
+		}),
+		"buffer-set!": liftProcedure(func(buf []byte, idx int, value int) {
+			buf[idx] = byte(value)
+		}),
+		"write-buffer!": liftProcedure(func(a, b []byte) {
+			copy(a, b)
+		}),
+		"read-file":      liftProcedure(os.ReadFile),
+		"string->buffer": liftProcedure(func(x string) []byte { return []byte(x) }),
+		"buffer->string": liftProcedure(func(x []byte) string { return string(x) }),
 	})
 }
 

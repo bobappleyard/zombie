@@ -3,7 +3,7 @@ package data
 import (
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
+	"github.com/bobappleyard/zombie/internal/assert"
 )
 
 func TestMatrix_AddRow(t *testing.T) {

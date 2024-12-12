@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
+	"github.com/bobappleyard/zombie/internal/assert"
 )
 
 func TestSet(t *testing.T) {

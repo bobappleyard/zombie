@@ -115,22 +115,22 @@ func liftProcedure(f any) procedure {
 	panic("unsupported type")
 }
 
-type CustomType struct {
+type StructType struct {
 	name string
 	size int
 }
 
-type CustomObject struct {
-	of   *CustomType
+type Struct struct {
+	of   *StructType
 	data []any
 }
 
 type CellAccessor struct {
-	of  *CustomType
+	of  *StructType
 	idx int
 }
 
-func (x *CustomObject) String() string {
+func (x *Struct) String() string {
 	return fmt.Sprintf("#<%s>", x.of.name)
 }
 
@@ -138,6 +138,6 @@ func (x *CellAccessor) String() string {
 	return "#<accessor>"
 }
 
-func (x *CustomType) String() string {
+func (x *StructType) String() string {
 	return "#<type>"
 }

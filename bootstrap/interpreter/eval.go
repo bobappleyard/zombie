@@ -24,6 +24,7 @@ type scope struct {
 func (s *scope) capture() *scope {
 	return &scope{
 		parent: s,
+		pkg:    s.pkg,
 		defs:   map[string]any{},
 	}
 }
@@ -58,7 +59,7 @@ func (p *process) call(f procedure, args []any, tail bool) {
 	if tail {
 		return
 	}
-	for p.f != nil {
+	for p.f != nil && p.err == nil {
 		f = p.f
 		p.f = nil
 		f.apply(p)
@@ -74,6 +75,7 @@ func (p *process) fail(e error) {
 }
 
 func (p *process) eval(s *scope, e sexpr.Expr, tail bool) {
+	defer attachTrace(&p.err, s.pkg.path, e)
 	switch e.Kind() {
 	case sexpr.Number:
 		x, err := strconv.Atoi(e.UnsafeText())
@@ -91,6 +93,7 @@ func (p *process) eval(s *scope, e sexpr.Expr, tail bool) {
 		x, ok := s.getVar(e.UnsafeText())
 		if !ok {
 			p.err = fmt.Errorf("%s: %w", e.UnsafeText(), ErrUnboundVar)
+			return
 		}
 		p.value = x
 		return
@@ -145,6 +148,9 @@ func (p *process) evalBegin(s *scope, e sexpr.Expr, tail bool) {
 	}
 	for !e.Tail().Empty() {
 		p.eval(s, e.Head(), false)
+		if p.err != nil {
+			return
+		}
 		e = e.Tail()
 	}
 	p.eval(s, e.Head(), tail)

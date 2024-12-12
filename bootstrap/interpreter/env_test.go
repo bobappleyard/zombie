@@ -75,6 +75,7 @@ func TestToplevel(t *testing.T) {
 			}
 			p := &Pkg{
 				owner: e,
+				path:  "<test>",
 				defs: map[string]any{
 					"log": l,
 				},
@@ -91,7 +92,10 @@ func TestPackageFile(t *testing.T) {
 	e := &Env{
 		path: "testdata",
 		pkgs: map[string]*Pkg{
-			"zombie.test": &Pkg{
+			"zombie": {
+				init: true,
+			},
+			"zombie.test": {
 				exports: []string{"log"},
 				init:    true,
 				defs: map[string]any{

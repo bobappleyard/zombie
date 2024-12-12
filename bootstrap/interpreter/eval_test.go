@@ -90,6 +90,7 @@ func TestEval(t *testing.T) {
 				defs: maps.Clone(defs),
 			}
 			p.eval(s, e, false)
+			assert.Nil(t, p.err)
 			assert.Equal(t, p.value, test.out)
 		})
 	}

@@ -45,18 +45,11 @@ func TestBuiltins(t *testing.T) {
 		{
 			name: "Pair",
 			in: `
-				(define %pair (make-type "pair" 2))
-				(define %head (cell-accessor %pair 0))
-				(define %tail (cell-accessor %pair 1))
-				(define make-pair (lambda (a d)
-									(let ((p (make %pair)))
-									(begin
-										(cell-set! %head p a)
-										(cell-set! %tail p d)
-										p))))
-				(define pair? (lambda (x) (is? %pair x)))
-				(define head (lambda (x) (cell-ref %head x)))
-				(define tail (lambda (x) (cell-ref %tail x)))
+				(define %pair (make-struct-type "pair" 2))
+				(define make-pair (lambda (a d) (make-struct %pair a d)))
+				(define pair? (lambda (x) (struct-is? %pair x)))
+				(define head (lambda (x) (bind-struct %pair x (lambda (a d) a))))
+				(define tail (lambda (x) (bind-struct %pair x (lambda (a d) d))))
 
 				(print (head (make-pair 1 2)))
 			`,
@@ -72,6 +65,7 @@ func TestBuiltins(t *testing.T) {
 			out, err := captureOutput(func() error {
 				p := &Pkg{
 					owner: e,
+					path:  "<test>",
 					defs:  map[string]any{},
 				}
 				p.Import("zombie.internal.builtins")

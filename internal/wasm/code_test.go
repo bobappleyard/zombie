@@ -3,7 +3,7 @@ package wasm
 import (
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
+	"github.com/bobappleyard/zombie/internal/assert"
 	"github.com/bytecodealliance/wasmtime-go/v27"
 )
 

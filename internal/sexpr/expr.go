@@ -1,6 +1,7 @@
 package sexpr
 
 import (
+	"bytes"
 	"iter"
 	"unsafe"
 )
@@ -34,6 +35,12 @@ func (e Expr) Kind() Kind {
 
 func (e Expr) Position() int {
 	return e.structure[e.pos].start
+}
+
+var nl = []byte{'\n'}
+
+func (e Expr) Line() int {
+	return 1 + bytes.Count(e.text[:e.Position()], nl)
 }
 
 func (e Expr) Text() string {

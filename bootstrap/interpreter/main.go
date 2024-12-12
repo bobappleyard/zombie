@@ -14,8 +14,15 @@ func main() {
 		log.Fatal(err)
 	}
 	env := newEnv(os.Getenv("ZOMBIE_PATH"))
+	registerBuiltins(env)
 	pkg := Pkg{
 		owner: env,
+		path:  "<main>",
+		defs:  map[string]any{},
+	}
+	err = pkg.Import("zombie")
+	if err != nil {
+		log.Fatal(err)
 	}
 	err = pkg.evalFile(src)
 	if err != nil {

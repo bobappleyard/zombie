@@ -1,0 +1,33 @@
+;; match objects
+(define %match (make-struct-type "match" 3))
+(define make-match  (lambda (success position value) 
+                      (make-struct %match success position value)))
+
+(define char-of (lambda (s) (buffer-ref (string->buffer s) 0)))
+
+(define zero-char (char-of "0"))
+(define quote-char (char-of "\""))
+(define escape-char (char-of "\\"))
+(define newline-char (char-of "\n"))
+
+(define parse-number
+  (lambda (buf start)
+    (let ((next false)
+          (get-digit  (lambda (pos)
+                        (if (>= pos (buffer-length buf))
+                          false
+                          (let ((c (- (buffer-ref buf pos) zero-char)))
+                            (if (< c 0)
+                              false
+                              (if (> c 9)
+                                false
+                                c)))))))
+      (begin
+        (set! next
+          (lambda (pos acc)
+            (let ((c (get-digit pos)))
+              (if c
+                (next (+ pos 1) (+ (* 10 acc) c))
+                (make-match (not (= pos start)) pos acc)))))
+        (next start 0)))))
+

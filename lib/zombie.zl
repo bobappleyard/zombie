@@ -7,48 +7,36 @@
 ;; exports is available in all packages.
 ;;
 
-;; defined by the runtime
 (import zombie.internal.builtins)
+
+;; vectors
+(export vector make-vector vector? vector-length vector-ref vector-set!)
+
+;; structs
+(export make-struct-type make-struct struct-is? bind-struct)
+
+;; boxes
+(export box? box box-ref box-set!)
+
+(define %box (make-struct-type "box" 1))
+(define box? (lambda (x) (struct-is? %box x)))
+(define box (lambda (x) (make-struct %box (vector x))))
+(define box-ref (lambda (x) (bind-struct %box x (lambda (v) (vector-ref v 0)))))
+(define box-set! (lambda (x n) (bind-struct %box x (lambda (v) (vector-set! v 0 n)))))
+
+;; buffers and io
+(export buffer? make-buffer buffer-length buffer-segment buffer-ref buffer-set!)
+(export read-file write-buffer! string->buffer buffer->string)
 
 ;; misc
 (export print nil eq?)
-(export make-type is? make cell-accessor cell-ref cell-set!)
 
 ;; booleans
-(export true false boolean?)
+(export not true false boolean?)
 (define not (lambda (x) (if x false true)))
 
 ;; numbers
-(export + - * / mod > < = number?)
+(export + - * / mod > < = <= >= number?)
 (define >= (lambda (x y) (if (= x y) true (> x y))))
-(define >= (lambda (x y) (if (= x y) true (< x y))))
+(define <= (lambda (x y) (if (= x y) true (< x y))))
 
-;; lists
-(export null null?)
-(define %null (make-type "null" 0))
-(define null (make %null))
-(define null? (lambda (x) (is? %null x)))
-
-(export make-pair pair? head tail)
-(define %pair (make-type "pair" 2))
-(define %head (cell-accessor %pair 0))
-(define %tail (cell-accessor %pair 1))
-(define make-pair (lambda (a d)
-                    (let ((p (make %pair)))
-                      (cell-set! %head p a)
-                      (cell-set! %tail p d)
-                      p)))
-(define pair? (lambda (x) (is? %pair x)))
-(define head (lambda (x) (cell-ref %head x)))
-(define tail (lambda (x) (cell-ref %tail x)))
-
-;; symbols
-(export symbol? string->symbol symbol->string)
-(define %symbol (make-type "symbol" 1))
-(define %sym-string (cell-accessor %symbol 0))
-(define symbol? (lambda (x) (is? %symbol x)))
-(define string->symbol (lambda (s)
-                         (let ((sym (make %symbol)))
-                           (cell-set! %sym-string sym s)
-                           sym)))
-(define symbol->string (lambda (s) (cell-ref %sym-string s)))
