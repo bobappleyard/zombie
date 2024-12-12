@@ -3,8 +3,8 @@ package wasm
 import (
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
-	"github.com/bytecodealliance/wasmtime-go/v27"
+	"github.com/bobappleyard/zombie/internal/assert"
+	"github.com/bytecodealliance/wasmtime-go/v28"
 )
 
 func TestTables(t *testing.T) {

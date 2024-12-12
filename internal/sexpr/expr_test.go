@@ -46,7 +46,7 @@ func TestBuild(t *testing.T) {
 }
 
 func TestHeadTail(t *testing.T) {
-	e, _, _ := Read([]byte(`(1 2 3)`))
+	e, _, _ := Read([]byte(`(1 2 3)`), 0)
 
 	assert.False(t, e.Empty())
 	assert.Equal(t, e.Head().Kind(), Number)
@@ -67,7 +67,7 @@ func TestHeadTail(t *testing.T) {
 }
 
 func TestIter(t *testing.T) {
-	e, _, _ := Read([]byte(`(1 2 3)`))
+	e, _, _ := Read([]byte(`(1 2 3)`), 0)
 
 	for i, x := range e.All() {
 		assert.Equal(t, x.UnsafeText(), fmt.Sprint(i+1))
@@ -78,7 +78,7 @@ func TestIter(t *testing.T) {
 }
 
 func TestBind(t *testing.T) {
-	e, _, _ := Read([]byte(`(1 2 3)`))
+	e, _, _ := Read([]byte(`(1 2 3)`), 0)
 
 	var w, x, y, z Expr
 	assert.False(t, e.Bind())

@@ -3,8 +3,8 @@ package wasm
 import (
 	"testing"
 
-	"github.com/bobappleyard/zombie/util/assert"
-	"github.com/bytecodealliance/wasmtime-go/v27"
+	"github.com/bobappleyard/zombie/internal/assert"
+	"github.com/bytecodealliance/wasmtime-go/v28"
 )
 
 func TestConst(t *testing.T) {
@@ -268,8 +268,10 @@ func TestGC(t *testing.T) {
 	m.Types = append(m.Types, StructType{Fields: []Field{{Int32}}})
 
 	f := new(Func)
-	f.StructNew(0)
 	f.LocalGet(0)
+	f.StructNew(0)
+	f.StructGet(0, 0)
+	f.End()
 
 	addTestFunc(&m, *f)
 
@@ -287,7 +289,9 @@ func addTestFunc(m *Module, f Func) {
 func testModule(t *testing.T, m Module, in, out int32) {
 	t.Helper()
 
-	engine := wasmtime.NewEngine()
+	config := wasmtime.NewConfig()
+	config.SetWasmGC(true)
+	engine := wasmtime.NewEngineWithConfig(config)
 	defer engine.Close()
 	store := wasmtime.NewStore(engine)
 	mod, err := wasmtime.NewModule(engine, m.AppendWasm(nil))

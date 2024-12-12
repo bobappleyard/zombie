@@ -1,0 +1,52 @@
+(export eof eof?)
+(export reader? make-reader open-file read-string reader-current reader-next)
+
+(define %eof (make-struct-type "eof" 0))
+(define eof (make-struct %eof))
+(define eof? (lambda (x) (struct-is? %eof x)))
+
+;; readers
+(define %reader
+  (make-struct-type "reader" 2))
+
+(define reader? (lambda (x) (struct-is? %reader x)))
+
+(define eof-reader (make-struct %reader
+                                (lambda () eof)
+                                (lambda () eof-reader)))
+
+(define make-reader
+  (lambda (init eof? current next)
+    (let ((new false))
+      (begin
+        (set! new (lambda (x)
+                    (if (eof? x)
+                      eof-reader
+                      (make-struct  %reader
+                                    (lambda () (current x))
+                                    (lambda () (new (next x)))))))
+        (new init)))))
+
+(define open-file
+  (lambda (path)
+    (let ((buf (read-file path)))
+      (make-reader  0
+                    (lambda (pos) (>= pos (buffer-length buf)))
+                    (lambda (pos) (buffer-ref buf pos))
+                    (lambda (pos) (+ pos 1))))))
+
+(define read-string
+  (lambda (s)
+    (make-reader  s
+                  string-empty?
+                  string-first
+                  string-rest)))
+
+(define reader-current
+  (lambda (r)
+    (bind-struct %reader r  (lambda (current next) (current)))))
+
+(define reader-next
+  (lambda (r)
+    (bind-struct %reader r  (lambda (current next) (next)))))
+

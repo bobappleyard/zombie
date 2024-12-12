@@ -83,9 +83,9 @@ func TestParser(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			expr, rest, err := Read([]byte(test.in))
+			expr, rest, err := Read([]byte(test.in), 0)
 			if assert.Nil(t, err) {
-				assert.Equal(t, rest, []byte{})
+				assert.Equal(t, rest, len(test.in))
 				assert.Equal(t, expr.structure, test.out)
 			}
 		})
@@ -130,7 +130,7 @@ func TestParserErrors(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, _, err := Read([]byte(test.in))
+			_, _, err := Read([]byte(test.in), 0)
 			assert.Equal(t, err, test.err)
 		})
 	}
@@ -150,7 +150,7 @@ func TestParseIter(t *testing.T) {
 	
 	`
 
-	expr, _, err := Read([]byte(src))
+	expr, _, err := Read([]byte(src), 0)
 	assert.Nil(t, err)
 	assert.Equal(t, expr.Kind(), List)
 

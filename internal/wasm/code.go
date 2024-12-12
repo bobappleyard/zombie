@@ -122,4 +122,5 @@ func (c *Expr) I32Or()           { c.op(0x72) }
 func (c *Expr) I32Shl()          { c.op(0x74) }
 func (c *Expr) I32Shr()          { c.op(0x76) }
 
-func (c *Expr) StructNew(typeID uint32) { c.op(0xfb, 0x0, typeID) }
+func (c *Expr) StructNew(typeID uint32)      { c.op(0xfb, 0x0, typeID) }
+func (c *Expr) StructGet(typeID, idx uint32) { c.op(0xfb, 0x02, typeID, idx) }

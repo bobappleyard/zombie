@@ -83,13 +83,14 @@ func TestEval(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			e, _, _ := sexpr.Read([]byte(test.in))
+			e, _, _ := sexpr.Read([]byte(test.in), 0)
 			p := &process{}
 			s := &scope{
 				pkg:  pk,
 				defs: maps.Clone(defs),
 			}
 			p.eval(s, e, false)
+			assert.Nil(t, p.err)
 			assert.Equal(t, p.value, test.out)
 		})
 	}

@@ -18,20 +18,20 @@ type reader struct {
 	pos       int
 }
 
-func Read(src []byte) (Expr, []byte, error) {
+func Read(src []byte, start int) (Expr, int, error) {
 	p := reader{
 		text: src,
-		pos:  -1,
+		pos:  start - 1,
 	}
 	err := p.parse()
 	if err != nil {
-		return Expr{}, nil, err
+		return Expr{}, 0, err
 	}
 	res := Expr{
-		text:      src[:p.pos+1],
+		text:      src,
 		structure: p.structure,
 	}
-	return res, src[p.pos+1:], nil
+	return res, p.pos + 1, nil
 }
 
 func (p *reader) parse() error {

@@ -1,0 +1,55 @@
+(export string-builder?
+        make-string-builder 
+        string-builder->string
+        string-builder-add-char)
+
+(define %string-builder 
+  (make-struct-type "string-builder" 2))
+
+(define string-builder? 
+  (lambda (x) 
+    (struct-is? %string-builder x)))
+
+(define make-string-builder 
+  (lambda () 
+    (make-struct  %string-builder
+                  (box (make-buffer 0))
+                  (box 0))))
+
+(define string-builder-ensure-space
+  (lambda (b c)
+    (bind-struct %string-builder b
+      (lambda (buf size)
+        (let ((space (+ c (box-ref size)))
+              (starting-cap (buffer-length (box-ref buf)))
+              (next false))
+          (begin
+            (set! next  (lambda (cap)
+                          (if (>= cap space)
+                            (if (= cap starting-cap)
+                              true
+                              (let ((new (make-buffer cap)))
+                                (begin
+                                  (write-buffer! new (box-ref buf))
+                                  (box-set! buf new))))
+                            (next (* cap 2)))))
+            (next (if (= 0 starting-cap) 1 starting-cap))))))))
+
+(define string-builder-add-char
+  (lambda (b c)
+    (begin
+      (string-builder-ensure-space b 1)
+      (bind-struct %string-builder b
+        (lambda (buf size)
+          (begin
+            (buffer-set! (box-ref buf) (box-ref size) c)
+            (box-set! size (+ 1 (box-ref size)))))))))
+
+(define string-builder->string
+  (lambda (b)
+    (bind-struct %string-builder b
+      (lambda (buf size)
+        (buffer->string (buffer-segment (box-ref buf) 0 (box-ref size)))))))
+            
+
+

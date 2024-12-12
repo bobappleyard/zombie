@@ -1,0 +1,22 @@
+
+(define zero-char 48)
+(define parse-number
+  (lambda (buf pos)
+    (let ((next false))
+      (begin
+        (set! next
+          (lambda (pos acc)
+            (if (>= pos (buffer-length buf))
+              acc
+              (let ((c (- (buffer-ref buf pos) zero-char)))
+                (if (< c 0)
+                  acc
+                  (if (> c 9)
+                    acc
+                    (next (+ pos 1) (+ (* 10 acc) c))))))))
+        (next pos 0)))))
+
+(define val (parse-number (string->buffer "12390") 0))
+
+(print val)
+(print (> val 20))

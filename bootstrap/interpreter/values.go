@@ -32,6 +32,12 @@ func (l *lambda) apply(p *process) {
 type builtinProcedure func(p *process)
 
 func (f builtinProcedure) apply(p *process) {
+	defer func() {
+		e := recover()
+		if e != nil {
+			p.fail(fmt.Errorf("%s", e))
+		}
+	}()
 	f(p)
 }
 
@@ -39,15 +45,13 @@ var errType = reflect.TypeOf(new(error)).Elem()
 
 func callBuiltin(fv reflect.Value, ft reflect.Type, p *process) []reflect.Value {
 	defer func() {
-		msg := recover()
-		if msg == nil {
-			return
+		if msg := recover(); msg != nil {
+			if msg, ok := msg.(error); ok {
+				p.err = msg
+				return
+			}
+			p.err = fmt.Errorf("%s", msg)
 		}
-		if msg, ok := msg.(error); ok {
-			p.err = msg
-			return
-		}
-		p.err = fmt.Errorf("%s", msg)
 	}()
 	if p.argc != ft.NumIn() {
 		p.fail(ErrWrongArgCount)
@@ -115,22 +119,22 @@ func liftProcedure(f any) procedure {
 	panic("unsupported type")
 }
 
-type CustomType struct {
+type StructType struct {
 	name string
 	size int
 }
 
-type CustomObject struct {
-	of   *CustomType
+type Struct struct {
+	of   *StructType
 	data []any
 }
 
 type CellAccessor struct {
-	of  *CustomType
+	of  *StructType
 	idx int
 }
 
-func (x *CustomObject) String() string {
+func (x *Struct) String() string {
 	return fmt.Sprintf("#<%s>", x.of.name)
 }
 
@@ -138,6 +142,6 @@ func (x *CellAccessor) String() string {
 	return "#<accessor>"
 }
 
-func (x *CustomType) String() string {
+func (x *StructType) String() string {
 	return "#<type>"
 }
