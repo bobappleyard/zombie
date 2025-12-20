@@ -1,7 +1,7 @@
 (import zombie.internal.parse)
 (import zombie.io)
 
-(define m (match-value (parse-expr (read-string "(1 2 3)"))))
+(define m (match-value (parse-expr (read-string "(let 2 3)"))))
 (print (pair? m))
-(print (head m))
+(print (symbol->string (head m)))
 (print (head (tail m)))

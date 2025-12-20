@@ -1,0 +1,19 @@
+(export empty? empty)
+(export pair? make-pair head tail)
+(export symbol? string->symbol symbol->string)
+
+(define %empty (make-struct-type "empty" 0))
+(define empty (make-struct %empty))
+(define empty? (lambda (x) (struct-is? %empty x)))
+
+(define %pair (make-struct-type "pair" 2))
+(define make-pair (lambda (a d) (make-struct %pair a d)))
+(define pair? (lambda (x) (struct-is? %pair x)))
+(define head (lambda (x) (bind-struct %pair x (lambda (a d) a))))
+(define tail (lambda (x) (bind-struct %pair x (lambda (a d) d))))
+
+(define %symbol (make-struct-type "symbol" 1))
+(define symbol? (lambda (x) (is? %symbol x)))
+(define string->symbol (lambda (s) (make-struct %symbol s)))
+(define symbol->string (lambda (s) (bind-struct %symbol s (lambda (s) s))))
+
