@@ -1,7 +1,0 @@
-(import zombie.strings)
-
-(define b (make-string-builder))
-(string-builder-add-char b 49)
-(string-builder-add-char b 49)
-(string-builder-add-char b 50)
-(print (string-builder->string b))

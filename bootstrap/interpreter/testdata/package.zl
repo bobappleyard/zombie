@@ -1,3 +1,0 @@
-(export greet)
-
-(define greet (lambda (logger message) (logger message)))
