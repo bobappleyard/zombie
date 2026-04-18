@@ -92,3 +92,10 @@ func TestBind(t *testing.T) {
 
 	assert.False(t, e.Bind(&w, &x, &y, &z))
 }
+
+func TestLen(t *testing.T) {
+	n, _, _ := Read([]byte("0"), 0)
+	assert.Equal(t, Len(ListOf()), 0)
+	assert.Equal(t, Len(ListOf(n)), 1)
+	assert.Equal(t, Len(ListOf(n, n)), 2)
+}

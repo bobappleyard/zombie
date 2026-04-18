@@ -53,10 +53,10 @@ func TestBuiltins(t *testing.T) {
 			name: "Pair",
 			in: `
 				(define %pair (make-struct-type "pair" 2))
-				(define make-pair (lambda (a d) (make-struct %pair a d)))
-				(define pair? (lambda (x) (struct-is? %pair x)))
-				(define head (lambda (x) (bind-struct %pair x (lambda (a d) a))))
-				(define tail (lambda (x) (bind-struct %pair x (lambda (a d) d))))
+				(define (make-pair a d) (make-struct %pair a d))
+				(define (pair? x) (struct-is? %pair x))
+				(define (head x) (bind-struct %pair x (lambda (a d) a)))
+				(define (tail x) (bind-struct %pair x (lambda (a d) d)))
 
 				(print (head (make-pair 1 2)))
 			`,

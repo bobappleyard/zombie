@@ -21,6 +21,28 @@ const (
 	List
 )
 
+func ListOf(es ...Expr) Expr {
+	var b Builder
+	b.ListStart()
+	for _, e := range es {
+		b.Copy(e)
+	}
+	b.ListEnd()
+	return b.Expr()
+}
+
+func Len(e Expr) int {
+	if e.Kind() != List {
+		return -1
+	}
+	n := 0
+	for !e.Empty() {
+		n++
+		e = e.Tail()
+	}
+	return n
+}
+
 type node struct {
 	kind       Kind
 	start, end int
@@ -124,12 +146,6 @@ func (e Expr) needsList() {
 
 func (e Expr) needsAtom() {
 	if e.Kind() == List {
-		panic("bad kind")
-	}
-}
-
-func (e Expr) needsSymbol() {
-	if e.Kind() != Symbol {
 		panic("bad kind")
 	}
 }

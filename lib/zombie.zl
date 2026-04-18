@@ -3,8 +3,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;
-;; This is imported by default by the Zombie runtime, so anything that this
-;; exports is available in all packages.
+;; This is imported by default by the Zombie runtime, so anything that this exports is available in
+;; all packages.
 ;;
 
 (import zombie.internal.builtins)

@@ -43,6 +43,22 @@ func TestToplevel(t *testing.T) {
 			out: []string{"hello"},
 		},
 		{
+			name: "DefineFuncNice",
+			in: `
+				(define (f x) (log x))
+				(f "hello")
+			`,
+			out: []string{"hello"},
+		},
+		{
+			name: "DefineFuncCmplx",
+			in: `
+				(define (f x) (log x) (log x))
+				(f "hello")
+			`,
+			out: []string{"hello", "hello"},
+		},
+		{
 			name: "Import",
 			in: `
 				(import test)
@@ -58,6 +74,16 @@ func TestToplevel(t *testing.T) {
 				(log x)
 			`,
 			out: []string{"hey"},
+		},
+		{
+			name: "Syntax",
+			in: `
+				(define-syntax test
+				  (syntax-rules ()
+				    (_ "test")))
+				(log (test))
+			`,
+			out: []string{"test"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -79,6 +105,7 @@ func TestToplevel(t *testing.T) {
 				defs: map[string]any{
 					"log": l,
 				},
+				syntax: map[string]syntaxRules{},
 			}
 			err := p.evalFile([]byte(test.in))
 			assert.Nil(t, err)
